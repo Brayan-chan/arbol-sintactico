@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generador de Árboles Sintácticos</title>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.24.1/full/pyodide.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #333;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            color: #2c3e50;
+        }
+
+        .header p {
+            font-size: 1.1em;
+            color: #7f8c8d;
+        }
+
+        .content {
+            display: grid;
+            grid-template-columns: 1fr 1.5fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: #2c3e50;
+            font-size: 1.05em;
+        }
+
+        textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            resize: vertical;
+            min-height: 300px;
+            focus-within: border-color #9d6b3a;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #9d6b3a;
+            box-shadow: 0 0 0 3px rgba(157, 107, 58, 0.1);
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        button {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        #generateBtn {
+            background: linear-gradient(135deg, #9d6b3a 0%, #b8860b 100%);
+            color: white;
+            flex: 1;
+            min-width: 150px;
+        }
+
+        #generateBtn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(157, 107, 58, 0.3);
+        }
+
+        #generateBtn:active {
+            transform: translateY(0);
+        }
+
+        #generateBtn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        #clearBtn, #exampleBtn {
+            background: #ecf0f1;
+            color: #2c3e50;
+            min-width: 120px;
+        }
+
+        #clearBtn:hover, #exampleBtn:hover {
+            background: #d5dbdb;
+        }
+
+        .depth-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .depth-control span {
+            color: #2c3e50;
+            font-size: 0.95em;
+        }
+
+        .depth-control input {
+            width: 60px;
+            padding: 8px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 1em;
+        }
+
+        #treeContainer {
+            background: white;
+            border-radius: 12px;
+            overflow: auto;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+            position: relative;
+            min-height: 600px;
+        }
+
+        #emptyState {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #95a5a6;
+            font-size: 1.2em;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .error-container {
+            display: none;
+            background: #ffe6e6;
+            border-left: 4px solid #d63031;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            color: #d63031;
+        }
+
+        .error-container.show {
+            display: block;
+        }
+
+        .zoom-controls {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            display: flex;
+            gap: 8px;
+            z-index: 10;
+        }
+
+        .zoom-btn {
+            width: 40px;
+            height: 40px;
+            padding: 0;
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            color: #2c3e50;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .zoom-btn:hover {
+            background: #f8f9fa;
+            border-color: #9d6b3a;
+            color: #9d6b3a;
+        }
+
+        .download-btn {
+            background: #ecf0f1;
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+
+        .download-btn:hover {
+            background: #d5dbdb;
+        }
+
+        /* SVG Styles */
+        .link {
+            fill: none;
+            stroke: #b8860b;
+            stroke-width: 2px;
+        }
+
+        .node-circle {
+            fill: #d4af37;
+            stroke: #9d6b3a;
+            stroke-width: 2px;
+            cursor: pointer;
+        }
+
+        .node-text {
+            font-size: 16px;
+            font-weight: bold;
+            fill: #2c3e50;
+            text-anchor: middle;
+            pointer-events: none;
+            user-select: none;
+            font-family: 'Arial', sans-serif;
+        }
+
+        @media (max-width: 768px) {
+            .content {
+                grid-template-columns: 1fr;
+            }
+
+            .header h1 {
+                font-size: 1.8em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🌳 Generador de Árboles Sintácticos</h1>
+            <p>Visualiza la estructura sintáctica de tu código</p>
+        </div>
+
+        <div class="content">
+            <div class="card">
+                <label for="codeInput">Código Python</label>
+                <textarea id="codeInput" placeholder="# Escribe tu código Python aquí..."></textarea>
+                
+                <div class="controls">
+                    <button id="generateBtn">Generar Árbol</button>
+                    <button id="clearBtn">Limpiar</button>
+                    <button id="exampleBtn">Cargar Ejemplo</button>
+                    <div class="depth-control" style="margin-left: auto;">
+                        <span>Profundidad:</span>
+                        <input type="number" id="maxDepth" value="5" min="1" max="15">
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <label style="margin: 0;">Árbol Sintáctico</label>
+                    <button class="download-btn" id="downloadBtn">💾 Descargar SVG</button>
+                </div>
+                
+                <div class="error-container" id="errorContainer">
+                    <strong>❌ Error:</strong> <span id="errorMessage"></span>
+                </div>
+
+                <div id="treeContainer">
+                    <div class="zoom-controls">
+                        <button class="zoom-btn" id="zoomIn" title="Acercar">+</button>
+                        <button class="zoom-btn" id="zoomOut" title="Alejar">−</button>
+                        <button class="zoom-btn" id="zoomReset" title="Resetear">↺</button>
+                    </div>
+                    <div id="emptyState">
+                        <svg width="50" height="50" viewBox="0 0 50 50" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="25" cy="25" r="20"/>
+                            <line x1="25" y1="8" x2="25" y2="20"/>
+                            <line x1="25" y1="30" x2="25" y2="42"/>
+                            <line x1="8" y1="25" x2="20" y2="25"/>
+                            <line x1="30" y1="25" x2="42" y2="25"/>
+                        </svg>
+                        <p>El árbol sintáctico aparecerá aquí</p>
+                        <p style="font-size: 0.9em; color: #bdc3c7;">Escribe código y haz clic en "Generar Árbol"</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card" style="background: #e8f4f8; border-left: 4px solid #3498db;">
+            <h3 style="color: #2c3e50; margin-bottom: 10px;">💡 Cómo usar</h3>
+            <ul style="color: #555; line-height: 1.8; margin-left: 20px;">
+                <li><strong>Arrastra:</strong> Mueve el árbol con el mouse</li>
+                <li><strong>Zoom:</strong> Usa la rueda del mouse o los botones +/−</li>
+                <li><strong>Haz clic en nodos:</strong> Expande o colapsa sus hijos</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let pyodide = null;
+        let astData = null;
+        let svg = null;
+        let g = null;
+        let zoom = null;
+
+        // Initialize Pyodide
+        async function initPyodide() {
+            if (pyodide) return pyodide;
+            try {
+                pyodide = await loadPyodide();
+                console.log('Pyodide loaded successfully');
+                return pyodide;
+            } catch (error) {
+                console.error('Error loading Pyodide:', error);
+                showError('Error al cargar el entorno Python');
+                return null;
+            }
+        }
+
+        // Generate AST from Python code
+        async function generateAST(code) {
+            if (!pyodide) await initPyodide();
+            if (!pyodide) return null;
+
+            try {
+                pyodide.globals.set('user_code', code);
+                const maxDepth = parseInt(document.getElementById('maxDepth').value) || 5;
+                pyodide.globals.set('max_depth', maxDepth);
+
+                const pythonCode = `
+import ast
+import json
+
+def ast_to_dict(node, depth=0, max_depth=100):
+    if depth > max_depth:
+        return {'_type': '...', '_truncated': True}
+
+    if isinstance(node, ast.AST):
+        result = {'_type': node.__class__.__name__}
+        for field, value in ast.iter_fields(node):
+            if isinstance(value, list):
+                result[field] = [ast_to_dict(item, depth + 1, max_depth) for item in value]
+            else:
+                result[field] = ast_to_dict(value, depth + 1, max_depth)
+        return result
+    else:
+        return {'_value': repr(node), '_primitive': True}
+
+try:
+    tree = ast.parse(user_code)
+    result = ast_to_dict(tree, max_depth=max_depth)
+    output = json.dumps(result)
+except SyntaxError as e:
+    output = json.dumps({'error': f'Error de sintaxis en línea {e.lineno}: {e.msg}'})
+except Exception as e:
+    output = json.dumps({'error': str(e)})
+
+output
+`;
+
+                const result = await pyodide.runPythonAsync(pythonCode);
+                return result ? JSON.parse(result) : null;
+            } catch (error) {
+                console.error('Error:', error);
+                return { error: error.message };
+            }
+        }
+
+        // Convert AST to hierarchy
+        function astToHierarchy(node, name = 'Module') {
+            if (!node) return { name: 'null', children: [] };
+
+            if (node._value !== undefined) {
+                return { name: node._value, isValue: true, children: [] };
+            }
+
+            if (node._truncated) {
+                return { name: '...', children: [] };
+            }
+
+            const nodeName = node._type || 'Unknown';
+            const children = [];
+
+            for (const [key, value] of Object.entries(node)) {
+                if (key.startsWith('_')) continue;
+
+                if (Array.isArray(value)) {
+                    value.forEach((item, idx) => {
+                        const child = astToHierarchy(item, `${key}`);
+                        if (child) children.push(child);
+                    });
+                } else if (value && typeof value === 'object') {
+                    const child = astToHierarchy(value, key);
+                    if (child) {
+                        child.fieldName = key;
+                        children.push(child);
+                    }
+                }
+            }
+
+            return { name: nodeName, children: children };
+        }
+
+        // Draw tree with D3
+        function drawTree(data) {
+            d3.select('#treeContainer').selectAll('svg').remove();
+            document.getElementById('emptyState').style.display = 'none';
+
+            const container = document.getElementById('treeContainer');
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+
+            // <CHANGE> Mejorar el espaciado vertical y horizontal para un layout jerárquico más limpio
+            const svg = d3.select('#treeContainer')
+                .append('svg')
+                .attr('width', width)
+                .attr('height', height)
+                .style('background', 'white');
+
+            const g = svg.append('g');
+
+            // Create hierarchy and tree layout
+            const hierarchy = d3.hierarchy(data);
+            const treeLayout = d3.tree()
+                .size([width - 100, height - 100])
+                .separation((a, b) => {
+                    // <CHANGE> Mayor separación entre nodos hermanos para mejor legibilidad
+                    return (a.parent === b.parent ? 1.5 : 2) / (a.depth || 1);
+                });
+
+            treeLayout(hierarchy);
+
+            // Draw links
+            g.selectAll('.link')
+                .data(hierarchy.links())
+                .enter()
+                .append('path')
+                .attr('class', 'link')
+                .attr('d', d3.linkVertical()
+                    .x(d => d.x)
+                    .y(d => d.y));
+
+            // Draw nodes
+            const nodes = g.selectAll('.node')
+                .data(hierarchy.descendants())
+                .enter()
+                .append('g')
+                .attr('class', 'node')
+                .attr('transform', d => `translate(${d.x},${d.y})`);
+
+            // <CHANGE> Nodos circulares con colores tierra/dorado
+            nodes.append('circle')
+                .attr('class', 'node-circle')
+                .attr('r', 18)
+                .attr('fill', '#d4af37')
+                .attr('stroke', '#9d6b3a')
+                .attr('stroke-width', 2)
+                .on('click', (event, d) => {
+                    if (d.children || d._children) {
+                        toggleNode(d);
+                        updateTreeDisplay();
+                    }
+                });
+
+            // <CHANGE> Texto más grande y legible dentro de los nodos
+            nodes.append('text')
+                .attr('class', 'node-text')
+                .attr('dy', '0.35em')
+                .attr('text-anchor', 'middle')
+                .style('font-size', '13px')
+                .style('font-weight', 'bold')
+                .style('fill', '#2c3e50')
+                .text(d => {
+                    let label = d.data.name;
+                    return label.length > 12 ? label.substring(0, 10) + '...' : label;
+                });
+
+            // Zoom behavior
+            zoom = d3.zoom()
+                .scaleExtent([0.5, 3])
+                .on('zoom', event => {
+                    g.attr('transform', event.transform);
+                });
+
+            svg.call(zoom);
+
+            // Center tree
+            const bounds = g.node().getBBox();
+            const scale = 0.9 / Math.max(bounds.width / width, bounds.height / height);
+            const translate = [width / 2 - (bounds.x + bounds.width / 2) * scale, 40];
+            svg.call(zoom.transform, d3.zoomIdentity.translate(translate[0], translate[1]).scale(scale));
+        }
+
+        function toggleNode(d) {
+            if (d.children) {
+                d._children = d.children;
+                d.children = null;
+            } else {
+                d.children = d._children;
+                d._children = null;
+            }
+        }
+
+        function updateTreeDisplay() {
+            if (astData) {
+                const hierarchy = astToHierarchy(astData);
+                drawTree(hierarchy);
+            }
+        }
+
+        // Utility functions
+        function showError(message) {
+            const container = document.getElementById('errorContainer');
+            document.getElementById('errorMessage').textContent = message;
+            container.classList.add('show');
+        }
+
+        function hideError() {
+            document.getElementById('errorContainer').classList.remove('show');
+        }
+
+        // Event listeners
+        document.getElementById('generateBtn').addEventListener('click', async () => {
+            const code = document.getElementById('codeInput').value.trim();
+            if (!code) {
+                showError('Por favor, ingresa código Python');
+                return;
+            }
+
+            hideError();
+            document.getElementById('generateBtn').disabled = true;
+
+            const ast = await generateAST(code);
+            document.getElementById('generateBtn').disabled = false;
+
+            if (ast && ast.error) {
+                showError(ast.error);
+            } else if (ast) {
+                astData = ast;
+                const hierarchy = astToHierarchy(ast);
+                drawTree(hierarchy);
+            }
+        });
+
+        document.getElementById('clearBtn').addEventListener('click', () => {
+            document.getElementById('codeInput').value = '';
+            d3.select('#treeContainer').selectAll('svg').remove();
+            document.getElementById('emptyState').style.display = 'flex';
+            hideError();
+            astData = null;
+        });
+
+        document.getElementById('exampleBtn').addEventListener('click', () => {
+            document.getElementById('codeInput').value = 'x = 3 + 5\nprint(x)';
+        });
+
+        document.getElementById('zoomIn').addEventListener('click', () => {
+            d3.select('#treeContainer svg').transition().call(zoom.scaleBy, 1.3);
+        });
+
+        document.getElementById('zoomOut').addEventListener('click', () => {
+            d3.select('#treeContainer svg').transition().call(zoom.scaleBy, 0.7);
+        });
+
+        document.getElementById('zoomReset').addEventListener('click', () => {
+            d3.select('#treeContainer svg').transition().call(zoom.transform, d3.zoomIdentity);
+        });
+
+        document.getElementById('downloadBtn').addEventListener('click', () => {
+            const svgElement = d3.select('#treeContainer svg').node();
+            if (!svgElement) {
+                showError('Primero genera un árbol');
+                return;
+            }
+
+            const serializer = new XMLSerializer();
+            let source = serializer.serializeToString(svgElement);
+            source = '<?xml version="1.0" standalone="no"?>\r\n' + source;
+
+            const blob = new Blob([source], { type: 'image/svg+xml;charset=utf-8' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = 'arbol-sintactico.svg';
+            link.click();
+        });
+
+        // Initialize
+        window.addEventListener('load', () => {
+            initPyodide();
+            document.getElementById('exampleBtn').click();
+        });
+    </script>
+</body>
+</html>
